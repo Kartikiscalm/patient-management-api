@@ -9,6 +9,22 @@ A lightweight **FastAPI** project for managing patient records using a local `pa
 - Supports create, view, update, delete, and sort operations
 - Runs inside Kubernetes with multiple replicas for better availability
 
+## ⚡ Run With Uvicorn
+
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+Start the FastAPI app:
+
+```bash
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Once running, use the endpoints listed below on port `8000`.
+
 ## 🚀 Run With Docker
 
 ```bash
@@ -16,11 +32,7 @@ docker build -t fastapi-app:v1.0 .
 docker run -p 8000:8000 fastapi-app:v1.0
 ```
 
-Open:
-
-```text
-http://localhost:8000
-```
+The container exposes the API on port `8000`.
 
 ## ☸️ Deploy With Kubernetes / Kind
 
@@ -38,11 +50,7 @@ Access the API using port forwarding:
 kubectl port-forward service/fastapi-service 8000:80
 ```
 
-Then open:
-
-```text
-http://localhost:8000
-```
+After port forwarding, send requests to the API through port `8000`.
 
 ## 🔗 Useful Endpoints
 
@@ -78,4 +86,3 @@ kubectl get pods
 ```
 
 More pods help distribute requests across replicas, improving availability and response capacity.
-
