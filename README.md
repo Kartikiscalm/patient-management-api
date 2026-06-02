@@ -1,88 +1,131 @@
-# 🏥 FastAPI Patient Management API
+# Patient Management System (FastAPI)
 
-A lightweight **FastAPI** project for managing patient records using a local `patients.json` file. The app is containerized with Docker and can be deployed on a local Kubernetes cluster using **Kind**.
+A robust FastAPI-based backend service for managing patient records. This project demonstrates modern development practices including containerization with Docker and orchestration using Kubernetes (Kind).
 
-## ✨ What This Project Does
+## Overview
 
-- Stores and manages patient data
-- Calculates BMI and health verdict automatically
-- Supports create, view, update, delete, and sort operations
-- Runs inside Kubernetes with multiple replicas for better availability
+The Patient Management System provides a suite of RESTful APIs to manage patient data stored in a JSON-based persistence layer. It features automated health metrics calculation (BMI and Health Verdict) and is designed for high availability within a Kubernetes environment.
 
-## ⚡ Run With Uvicorn
+## Key Features
 
-Install dependencies:
+- **Automated Calculations:** Real-time BMI and health verdict generation using Pydantic computed fields.
+- **Full CRUD Support:** Complete lifecycle management for patient records.
+- **Advanced Querying:** Support for sorting by physical metrics (height, weight, BMI).
+- **High Availability:** Configurable Kubernetes deployment with horizontal scaling and Pod Disruption Budgets (PDB).
+- **Containerized Architecture:** Fully Dockerized for consistent development and production parity.
 
-```bash
-pip install -r requirements.txt
+## Architecture
+
+The system is architected as a containerized microservice running within a Kubernetes cluster.
+
+```mermaid
+graph TD
+    User([User/Client]) -->|HTTP Requests| Service[K8s Service: fastapi-service]
+    
+    subgraph K8s_Cluster [Kubernetes Cluster]
+        Service -->|Load Balancing| Pods[API Replica Set]
+        
+        subgraph Replica_Set [Pods]
+            Pod1[FastAPI Pod 1]
+            Pod2[FastAPI Pod 2]
+            Pod3[FastAPI Pod 3]
+        end
+        
+        Replica_Set -.-> Persistence[(JSON Data Store)]
+    end
 ```
 
-Start the FastAPI app:
+## System Workflow
 
-```bash
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+The diagram below illustrates the sequence of operations for data persistence and validation.
+
+```mermaid
+sequenceDiagram
+    participant Client as User/Client
+    participant API as FastAPI Application
+    participant Model as Pydantic Models
+    participant DB as patients.json (Storage)
+
+    Client->>API: API Request (e.g., POST /create)
+    API->>DB: Load current records
+    API->>Model: Validate Input & Calculate Metrics
+    Model-->>API: Validated Object
+    API->>DB: Persist updated data
+    DB-->>API: Write Success
+    API-->>Client: HTTP Response
 ```
 
-Once running, use the endpoints listed below on port `8000`.
+## Getting Started
 
-## 🚀 Run With Docker
+### Local Development
 
-```bash
-docker build -t fastapi-app:v1.0 .
-docker run -p 8000:8000 fastapi-app:v1.0
-```
+1. **Install Dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-The container exposes the API on port `8000`.
+2. **Execute Application:**
+   ```bash
+   uvicorn main:app --reload --host 0.0.0.0 --port 8000
+   ```
+   The API will be accessible at `http://localhost:8000`.
 
-## ☸️ Deploy With Kubernetes / Kind
+### Docker Execution
 
-```bash
-kind create cluster --config kind-config.yaml
-kind load docker-image fastapi-app:v1.0
-kubectl apply -f deployment.yaml
-kubectl apply -f service.yaml
-kubectl apply -f pdb.yaml
-```
+1. **Build the Image:**
+   ```bash
+   docker build -t fastapi-app:v1.0 .
+   ```
 
-Access the API using port forwarding:
+2. **Run the Container:**
+   ```bash
+   docker run -p 8000:8000 fastapi-app:v1.0
+   ```
 
-```bash
-kubectl port-forward service/fastapi-service 8000:80
-```
+## Kubernetes Deployment
 
-After port forwarding, send requests to the API through port `8000`.
+The project includes manifests for deploying to a local **Kind** cluster.
 
-## 🔗 Useful Endpoints
+1. **Initialize Cluster & Load Image:**
+   ```bash
+   kind create cluster --config kind-config.yaml
+   kind load docker-image fastapi-app:v1.0
+   ```
 
-| Method | Endpoint | Purpose |
-| --- | --- | --- |
-| `GET` | `/` | API welcome message |
-| `GET` | `/about` | About the API |
-| `GET` | `/view` | View all patients |
-| `GET` | `/patient/{patient_id}` | View one patient |
-| `GET` | `/sort?sort_by=bmi&order=asc` | Sort patients |
-| `POST` | `/create` | Create a patient |
-| `PUT` | `/edit/{patient_id}` | Update a patient |
-| `DELETE` | `/delete/{patient_id}` | Delete a patient |
+2. **Apply Manifests:**
+   ```bash
+   kubectl apply -f deployment.yaml
+   kubectl apply -f service.yaml
+   kubectl apply -f pdb.yaml
+   ```
 
-## 📈 Horizontal Scaling
+3. **Access the Service:**
+   ```bash
+   kubectl port-forward service/fastapi-service 8000:80
+   ```
 
-The deployment currently runs multiple pods using:
+## API Reference
 
-```yaml
-replicas: 3
-```
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/` | Service health check / Welcome |
+| `GET` | `/about` | Service metadata |
+| `GET` | `/view` | Retrieve all patient records |
+| `GET` | `/patient/{id}` | Retrieve a specific patient record |
+| `GET` | `/sort` | Sort patients by `height`, `weight`, or `bmi` |
+| `POST` | `/create` | Register a new patient |
+| `PUT` | `/edit/{id}` | Update existing patient details |
+| `DELETE` | `/delete/{id}` | Remove a patient record |
 
-To improve performance and handle more traffic, increase the number of pods:
+## Scalability and Availability
 
+The service is configured to run with multiple replicas (default: 3) to ensure redundancy.
+
+### Scaling the Deployment
+To adjust the number of active instances:
 ```bash
 kubectl scale deployment fastapi-app --replicas=5
 ```
 
-Check running pods:
-
-```bash
-kubectl get pods
-```
-
-More pods help distribute requests across replicas, improving availability and response capacity.
+### Health Probes
+Kubernetes utilizes Liveness and Readiness probes (configured in `deployment.yaml`) to monitor pod health and manage traffic routing effectively.
