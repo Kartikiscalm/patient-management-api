@@ -5,7 +5,7 @@ kind: PodDisruptionBudget
 metadata:
   name: fastapi-pdb
 spec:
-  minAvailable: 2
+  minAvailable: 2               # min pods 2 available honge at a time 
   selector:
     matchLabels:
       app: fastapi
