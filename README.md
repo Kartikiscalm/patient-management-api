@@ -97,6 +97,7 @@ The project includes manifests for deploying to a local **Kind** cluster.
    kubectl apply -f deployment.yaml
    kubectl apply -f service.yaml
    kubectl apply -f pdb.yaml
+<<<<<<< HEAD
    kubectl apply -f hpa.yaml
    ```
 
