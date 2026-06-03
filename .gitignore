@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+path/to/venv/
+myenv/
+.env
+
+# Data
+patients.json
+
+# OS
+.DS_Store

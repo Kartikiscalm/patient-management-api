@@ -144,7 +144,7 @@ Execute the provided Python script to generate high traffic. This will increase 
   ```
 - **Execute Script:**
   ```bash
-  python stress_test.py
+  python test.py
   ```
 
 ### 3. Observe the Results
