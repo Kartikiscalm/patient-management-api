@@ -32,7 +32,7 @@ spec:
             port: 8000
           initialDelaySeconds: 15
           periodSeconds: 20
-        resources:
+        resources:                  #this all below is for how to config the deployment file for hps
           requests:
             cpu: "100m"
             memory: "128Mi"

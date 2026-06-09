@@ -4,9 +4,9 @@ import time
 
 # URL of your service (use load balancer IP or local port if port-forwarded)
 # If running inside Kubernetes, use the service name
-URL = "http://localhost:8000" 
-CONCURRENT_REQUESTS = 50  # Number of parallel tasks
-TOTAL_SECONDS = 60        # Duration of the test
+URL = "http://localhost:30080" 
+CONCURRENT_REQUESTS = 100  # Increased for more CPU impact
+TOTAL_SECONDS = 300        # Running longer to see HPA react (it takes ~2 min)
 
 async def send_request(client):
     try:

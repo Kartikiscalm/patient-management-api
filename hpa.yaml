@@ -8,7 +8,7 @@ spec:
     kind: Deployment
     name: fastapi-app
   minReplicas: 2
-  maxReplicas: 5     # max replicals that can run while testing 
+  maxReplicas: 10     # max replicals that can run while testing 
   metrics:
   - type: Resource
     resource:

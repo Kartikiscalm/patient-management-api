@@ -1,181 +1,325 @@
-# Patient Management System (FastAPI)
+# Patient Management System
 
-A robust FastAPI-based backend service for managing patient records. This project demonstrates modern development practices including containerization with Docker and orchestration using Kubernetes (Kind).
+A simple FastAPI patient records API running on Kubernetes with autoscaling, Grafana/Prometheus monitoring, Loki logs, and a small Python log poller for warning/error logs.
 
-## Overview
+## What This Project Has
 
-The Patient Management System provides a suite of RESTful APIs to manage patient data stored in a JSON-based persistence layer. It features automated health metrics calculation (BMI and Health Verdict) and is designed for high availability within a Kubernetes environment.
-
-## Key Features
-
-- **Automated Calculations:** Real-time BMI and health verdict generation using Pydantic computed fields.
-- **Full CRUD Support:** Complete lifecycle management for patient records.
-- **Advanced Querying:** Support for sorting by physical metrics (height, weight, BMI).
-- **High Availability:** Configurable Kubernetes deployment with horizontal scaling and Pod Disruption Budgets (PDB).
-- **Containerized Architecture:** Fully Dockerized for consistent development and production parity.
+- FastAPI backend for patient records
+- Docker image: `fastapi-app:v1.0`
+- Kubernetes Deployment, Service, HPA, and PDB
+- Grafana + Prometheus for stats
+- Loki + Promtail for logs
+- `log_poller.py` to poll Loki every 5 seconds
+- `warning_log_writer.py` to save warning/error logs into `warning_error_logs.txt`
 
 ## Architecture
 
-The system is architected as a containerized microservice running within a Kubernetes cluster.
+The system is architected as a containerized FastAPI microservice running inside a Kubernetes cluster.
 
 ```mermaid
-graph TD
-    User([User/Client]) -->|HTTP Requests| Service[K8s Service: fastapi-service]
-    
-    subgraph K8s_Cluster [Kubernetes Cluster]
-        Service -->|Load Balancing| Pods[API Replica Set]
-        
-        subgraph Replica_Set [Pods]
-            Pod1[FastAPI Pod 1]
-            Pod2[FastAPI Pod 2]
-            Pod3[FastAPI Pod 3]
+flowchart TD
+    Client([User / Client])
+
+    subgraph Cluster[Kubernetes Cluster]
+        Service[Service: fastapi-service<br/>LoadBalancer / NodePort<br/>receives API traffic]
+
+        subgraph AppLayer[Application Layer]
+            Pod1[FastAPI Pod 1<br/>port 8000]
+            Pod2[FastAPI Pod 2<br/>port 8000]
+            Pod3[FastAPI Pod 3<br/>port 8000]
         end
-        
-        Replica_Set -.-> Persistence[(JSON Data Store)]
+
+        Data[(patients.json<br/>Patient Data Store)]
+        HPA[HPA: fastapi-hpa<br/>min 2 pods, max 5 pods<br/>scales when CPU crosses 50%]
     end
+
+    Client -->|HTTP request| Service
+    Service -->|load balances| Pod1
+    Service -->|load balances| Pod2
+    Service -->|load balances| Pod3
+
+    Pod1 -->|read / write| Data
+    Pod2 -->|read / write| Data
+    Pod3 -->|read / write| Data
+
+    HPA -.->|adds or removes pods| AppLayer
 ```
 
 ## System Workflow
 
-The diagram below illustrates the sequence of operations for data persistence and validation.
+The request flow below shows how patient data is validated, stored, and returned.
 
 ```mermaid
 sequenceDiagram
-    participant Client as User/Client
+    participant User as User/Client
     participant API as FastAPI Application
     participant Model as Pydantic Models
-    participant DB as patients.json (Storage)
+    participant DB as patients.json Storage
 
-    Client->>API: API Request (e.g., POST /create)
+    User->>API: API request, for example POST /create
     API->>DB: Load current records
-    API->>Model: Validate Input & Calculate Metrics
-    Model-->>API: Validated Object
+    API->>Model: Validate input and calculate BMI
+    Model-->>API: Validated object
     API->>DB: Persist updated data
-    DB-->>API: Write Success
-    API-->>Client: HTTP Response
+    DB-->>API: Write success
+    API-->>User: HTTP response
 ```
 
-## Getting Started
+## Monitoring Flow
 
-### Local Development
+```mermaid
+flowchart LR
+    subgraph App[Application Layer]
+        Pods[FastAPI Pods]
+    end
 
-1. **Install Dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+    subgraph Logs[Logging Pipeline]
+        PodLogs[Container Logs]
+        Promtail[Promtail]
+        Loki[Loki]
+    end
 
-2. **Execute Application:**
-   ```bash
-   uvicorn main:app --reload --host 0.0.0.0 --port 8000
-   ```
-   The API will be accessible at `http://localhost:8000`.
+    subgraph Metrics[Metrics Pipeline]
+        Prometheus[Prometheus]
+        Grafana[Grafana]
+    end
 
-### Docker Execution
+    subgraph Local[Local Log Poller]
+        Poller[log_poller.py]
+        Writer[warning_log_writer.py]
+        File[warning_error_logs.txt]
+    end
 
-1. **Build the Image:**
-   ```bash
-   docker build -t fastapi-app:v1.0 .
-   ```
+    Pods --> PodLogs
+    PodLogs --> Promtail
+    Promtail --> Loki
+    Loki --> Grafana
+    Pods --> Prometheus
+    Prometheus --> Grafana
+    Loki --> Poller
+    Poller --> Writer
+    Writer --> File
+```
 
-2. **Run the Container:**
-   ```bash
-   docker run -p 8000:8000 fastapi-app:v1.0
-   ```
+## Main Files
 
-## Kubernetes Deployment
+| File | Use |
+| :--- | :--- |
+| `main.py` | FastAPI app |
+| `deployment.yaml` | Runs FastAPI pods |
+| `service.yaml` | Exposes the app |
+| `hpa.yaml` | Autoscaling rules |
+| `test.py` | Stress test for HPA |
+| `log_poller.py` | Reads latest logs from Loki |
+| `warning_log_writer.py` | Writes warning/error logs to file |
 
-The project includes manifests for deploying to a local **Kind** cluster.
+## Run Locally
 
-1. **Initialize Cluster & Load Image:**
-   ```bash
-   kind create cluster --config kind-config.yaml
-   kind load docker-image fastapi-app:v1.0
-   ```
-
-2. **Apply Manifests:**
-   ```bash
-   kubectl apply -f deployment.yaml
-   kubectl apply -f service.yaml
-   kubectl apply -f pdb.yaml
-<<<<<<< HEAD
-   kubectl apply -f hpa.yaml
-   ```
-
-3. **Horizontal Pod Autoscaling (HPA):**
-   HPA requires a metrics server. In Kind, you can install it using:
-   ```bash
-   kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
-   ```
-   *Note: You may need to patch the metrics-server to allow insecure TLS for Kind nodes:*
-   ```bash
-   kubectl patch deployment metrics-server -n kube-system --type='json' -p='[{"op": "add", "path": "/spec/template/spec/containers/0/args/-", "value": "--kubelet-insecure-tls"}]'
-   ```
-   Verify HPA status:
-   ```bash
-   kubectl get hpa
-   ```
-
-4. **Access the Service:**
-   ```bash
-   kubectl port-forward service/fastapi-service 8000:80
-   ```
-
-## Stress Testing & Horizontal Scaling
-
-To observe the Horizontal Pod Autoscaler in action, you can perform a stress test that bombards the service with requests.
-
-### 1. Watch in Real-Time
-Open two dedicated terminal windows to monitor the scaling process:
-
-- **Monitor HPA Metrics:**
-  ```bash
-  kubectl get hpa fastapi-hpa --watch
-  ```
-- **Monitor Pod Status:**
-  ```bash
-  kubectl get pods -l app=fastapi --watch
-  ```
-
-### 2. Run the Stress Test
-Execute the provided Python script to generate high traffic. This will increase CPU utilization and trigger the HPA to spin up more pods.
-
-- **Ensure Port-Forward is Running:**
-  ```bash
-  kubectl port-forward service/fastapi-service 8000:80
-  ```
-- **Execute Script:**
-  ```bash
-  python test.py
-  ```
-
-### 3. Observe the Results
-As the CPU usage exceeds the 50% threshold defined in `hpa.yaml`, you will see:
-1. The `TARGETS` column in the HPA watch update to show higher utilization.
-2. New pods being created in the Pod watch (up to `maxReplicas: 5`).
-3. Once the script is stopped, the pods will eventually scale back down to `minReplicas` after the cooldown period.
-
-## API Reference
-
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/` | Service health check / Welcome |
-| `GET` | `/about` | Service metadata |
-| `GET` | `/view` | Retrieve all patient records |
-| `GET` | `/patient/{id}` | Retrieve a specific patient record |
-| `GET` | `/sort` | Sort patients by `height`, `weight`, or `bmi` |
-| `POST` | `/create` | Register a new patient |
-| `PUT` | `/edit/{id}` | Update existing patient details |
-| `DELETE` | `/delete/{id}` | Remove a patient record |
-
-## Scalability and Availability
-
-The service is configured to run with multiple replicas (default: 3) to ensure redundancy.
-
-### Scaling the Deployment
-To adjust the number of active instances:
 ```bash
-kubectl scale deployment fastapi-app --replicas=5
+pip install -r requirements.txt
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### Health Probes
-Kubernetes utilizes Liveness and Readiness probes (configured in `deployment.yaml`) to monitor pod health and manage traffic routing effectively.
+Open:
+
+```text
+http://localhost:8000
+```
+
+Docs:
+
+```text
+http://localhost:8000/docs
+```
+
+## Run On Kubernetes
+
+Build and load image:
+
+```bash
+docker build -t fastapi-app:v1.0 .
+kind load docker-image fastapi-app:v1.0
+```
+
+Apply manifests:
+
+```bash
+kubectl apply -f deployment.yaml
+kubectl apply -f service.yaml
+kubectl apply -f pdb.yaml
+kubectl apply -f hpa.yaml
+```
+
+Check everything:
+
+```bash
+kubectl get pods
+kubectl get svc
+kubectl get hpa
+```
+
+## Access The API
+
+Port-forward:
+
+```bash
+kubectl port-forward service/fastapi-service 8000:80
+```
+
+Then open:
+
+```text
+http://localhost:8000
+```
+
+If using NodePort:
+
+```text
+http://localhost:30080
+```
+
+If using MetalLB, check the external IP:
+
+```bash
+kubectl get svc fastapi-service
+```
+
+Then open:
+
+```text
+http://<EXTERNAL-IP>
+```
+
+## API Endpoints
+
+| Method | Endpoint | Purpose |
+| :--- | :--- | :--- |
+| `GET` | `/` | Health check |
+| `GET` | `/view` | Show all patients |
+| `GET` | `/patient/{id}` | Show one patient |
+| `GET` | `/sort?sort_by=bmi&order=asc` | Sort patients |
+| `POST` | `/create` | Create patient |
+| `PUT` | `/edit/{id}` | Update patient |
+| `DELETE` | `/delete/{id}` | Delete patient |
+
+## See Stats
+
+Watch HPA:
+
+```bash
+kubectl get hpa fastapi-hpa --watch
+```
+
+Watch pods scale:
+
+```bash
+kubectl get pods -l app=fastapi --watch
+```
+
+See CPU/memory:
+
+```bash
+kubectl top pods
+kubectl top nodes
+```
+
+Run stress test:
+
+```bash
+python3 test.py
+```
+
+## Open Grafana
+
+Port-forward Grafana:
+
+```bash
+kubectl port-forward -n monitoring svc/kube-prometheus-stack-grafana 3000:80
+```
+
+Open:
+
+```text
+http://localhost:3000
+```
+
+Use Grafana dashboards for Prometheus stats.
+
+## See Logs In Grafana
+
+Go to:
+
+```text
+Grafana -> Explore -> Loki -> Code
+```
+
+Use these queries:
+
+```logql
+{namespace="default"}
+```
+
+FastAPI only:
+
+```logql
+{namespace="default", app="fastapi"}
+```
+
+Warning/error only:
+
+```logql
+{namespace="default"} |~ "(?i)error|warning|warn|failed|exception"
+```
+
+## Run The Log Poller
+
+Port-forward Loki:
+
+```bash
+kubectl port-forward -n monitoring svc/loki 3100:3100
+```
+
+Run:
+
+```bash
+python3 log_poller.py
+```
+
+It prints the latest 5 logs every 5 seconds.
+
+If any log contains `error`, `warning`, `failed`, or `exception`, it writes it to:
+
+```text
+warning_error_logs.txt
+```
+
+## Test Warning/Error Logs
+
+Create a test pod:
+
+```bash
+kubectl run log-test --image=busybox --restart=Never -- /bin/sh -c 'echo "ERROR test log from busybox"; echo "WARNING test warning from busybox"; sleep 10'
+```
+
+Check in Grafana:
+
+```logql
+{pod="log-test"}
+```
+
+Delete test pod:
+
+```bash
+kubectl delete pod log-test
+```
+
+## Quick Commands
+
+```bash
+kubectl get pods
+kubectl get svc
+kubectl get hpa
+kubectl logs -l app=fastapi
+python3 log_poller.py
+python3 test.py
+```
